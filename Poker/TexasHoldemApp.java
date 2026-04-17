@@ -1,0 +1,269 @@
+package Poker;
+
+import java.util.HashMap;
+import java.util.concurrent.CountDownLatch;
+
+import Game.GameWriteable;
+import processing.core.PApplet;
+import processing.core.PImage;
+
+public class TexasHoldemApp extends PApplet implements GameWriteable {
+    TexasHoldem cardGame;
+    HashMap<String, PImage> cardImages = new HashMap<>();
+    private int timer;
+    public CountDownLatch latch;
+
+    public static void main(String[] args) {
+        PApplet.main("Poker.TexasHoldemApp");
+    }
+
+    @Override
+    public void settings() {
+        size(1000, 600);
+        for (String rank : TexasHoldem.Rank) {
+            for (String suit : TexasHoldem.Suit) {
+                cardImages.put(rank + suit.toLowerCase(), loadImage("Data/" + rank + suit.toLowerCase() + ".png"));
+            }
+        }
+        cardImages.put("cardback", loadImage("Data/cardback.png"));
+        cardGame = new TexasHoldem(cardImages);
+    }
+
+    @Override
+    public void draw() {
+        if (cardGame.gamestart == false) {
+            background(0, 122, 24);
+            fill(200);
+            cardGame.startButton.draw(this);
+
+            fill(0);
+            textSize(20);
+            textAlign(CENTER, CENTER);
+            text("Start Next Round",
+                    cardGame.startButton.x + cardGame.startButton.width / 2,
+                    cardGame.startButton.y - 10 + cardGame.startButton.height / 2);
+
+            textSize(10);
+            text("(This will also pay your anti)",
+                    cardGame.startButton.x + cardGame.startButton.width / 2,
+                    cardGame.startButton.y + 10 + cardGame.startButton.height / 2);
+            textSize(16);
+
+            if (cardGame.whofolded.equals("The Computer") || cardGame.whofolded.equals("Player One")) {
+                text(cardGame.whofolded + " folded. The Money has been transferred.",
+                        cardGame.startButton.x + cardGame.startButton.width / 2,
+                        cardGame.startButton.y - 200 + cardGame.startButton.height / 2);
+            }
+
+        } else {
+            if (!cardGame.IsGameOver()) {
+                drawscreen();
+                cardGame.whofolded = "No one";
+
+                if (cardGame.getCurrentPlayer().equals("Player Two")) {
+                    fill(0);
+                    textSize(16);
+                    text("Computer is thinking...", width / 2 - 80, height / 2 + 80);
+                    timer++;
+                    if (timer == 100) {
+                        cardGame.handleComputerTurn();
+                        timer = 0;
+                    }
+                }
+
+                //
+                if (cardGame.computerStatus.equals("raised")) {
+                    if (cardGame.computerBid > 0) {
+                        textSize(24);
+                        fill(0);
+                        text("The Computer " + cardGame.computerStatus + " $" + cardGame.computerBid + ".",
+                                width / 2 + 200, height / 2 + 100);
+                        textSize(16);
+                    } else {
+                        textSize(24);
+                        text("The Computer has called.", width / 2 + 200, height / 2 + 100);
+                        textSize(16);
+                    }
+
+                }
+                //
+
+                if (cardGame.getCurrentPlayer().equals("Dealer")) {
+                    fill(0);
+                    textSize(16);
+                    if (cardGame.computerStatus.equals("called") || cardGame.computerStatus.equals("checked")) {
+                        textSize(24);
+                        text("The Computer " + cardGame.computerStatus + ".", width / 2 + 200, height / 2 + 100);
+                        textSize(16);
+                    }
+                    // text("Dealer is thinking...", width / 2 - 80, height / 2 + 80);
+                    timer++;
+                    if (timer == 60) {
+                        cardGame.handledealerTurn();
+                        timer = 0;
+                    }
+                }
+                cardGame.drawChoices(this);
+
+            } else {
+                for (int i = 0; i < cardGame.playerTwoHand.getSize(); i++) {
+                    Card card = cardGame.playerTwoHand.getCard(i);
+                    card.setTurned(false);
+
+                }
+
+                timer++;
+                if (timer == 60) {
+                    cardGame.handledealerTurn();
+                    String winner = cardGame.getWinner();
+                    drawscreen();
+                    fill(0);
+                    textSize(20);
+                    text("The Winner is " + winner + "!", width / 2 - 80, height / 2 + 80);
+                }
+                if (timer == 600) {
+                    String winner = cardGame.getWinner();
+                    if (winner.equals("Player One")) {
+                        cardGame.playerMoney += cardGame.potMoney;
+                        cardGame.potMoney = 0;
+                    } else {
+                        cardGame.computerMoney += cardGame.potMoney;
+                        cardGame.potMoney = 0;
+
+                    }
+                    timer = 0;
+                    cardGame.switchTurns();
+                    cardGame.initializeGame();
+                    cardGame.gamestart = false;
+                }
+            }
+        }
+    }
+
+    @Override
+    public void mousePressed() {
+        if (cardGame.gamestart == false) {
+            cardGame.handleStartButtonClick(mouseX, mouseY);
+        } else {
+            cardGame.handleCheckButtonClick(mouseX, mouseY);
+            cardGame.handleFoldButtonClick(mouseX, mouseY);
+            cardGame.handleRaiseButtonClick(mouseX, mouseY);
+            cardGame.handleCallButtonClick(mouseX, mouseY);
+        }
+    }
+
+    public void drawscreen() {
+        background(0, 122, 24);
+        // check button
+        fill(200);
+        cardGame.checkButton.draw(this);
+        cardGame.raiseButton.draw(this);
+        cardGame.foldButton.draw(this);
+        cardGame.callButton.draw(this);
+        fill(0);
+        textAlign(CENTER, CENTER);
+        text("Check", cardGame.checkButton.x + cardGame.checkButton.width / 2,
+                cardGame.checkButton.y + cardGame.checkButton.height / 2);
+        text("Raise", cardGame.raiseButton.x + cardGame.raiseButton.width / 2,
+                cardGame.raiseButton.y + cardGame.raiseButton.height / 2);
+        text("Fold", cardGame.foldButton.x + cardGame.foldButton.width / 2,
+                cardGame.foldButton.y + cardGame.foldButton.height / 2);
+        text("Call", cardGame.callButton.x + cardGame.callButton.width / 2,
+                cardGame.callButton.y + cardGame.callButton.height / 2);
+
+        if (cardGame.adjustingRaise) {
+            fill(200);
+            cardGame.plusButton.draw(this);
+            cardGame.minusButton.draw(this);
+            cardGame.confirmRaiseButton.draw(this);
+
+            fill(0);
+            text("+", cardGame.plusButton.x + cardGame.plusButton.width / 2,
+                    cardGame.plusButton.y + cardGame.plusButton.height / 2);
+            text("-", cardGame.minusButton.x + cardGame.minusButton.width / 2,
+                    cardGame.minusButton.y + cardGame.minusButton.height / 2);
+            text("Bet $" + cardGame.raiseAmount,
+                    cardGame.confirmRaiseButton.x + cardGame.confirmRaiseButton.width / 2,
+                    cardGame.confirmRaiseButton.y + cardGame.confirmRaiseButton.height / 2);
+        }
+
+        // Draw player hands
+        text("You have $" + cardGame.playerMoney, 60, 585);
+        for (int i = 0; i < cardGame.playerOneHand.getSize(); i++) {
+            Card card = cardGame.playerOneHand.getCard(i);
+            if (card != null) {
+                card.draw(this);
+            }
+        }
+        // Draw computer hand
+        text("The Computer has $" + cardGame.computerMoney, 460, 585);
+        for (int i = 0; i < cardGame.playerTwoHand.getSize(); i++) {
+            Card card = cardGame.playerTwoHand.getCard(i);
+            if (card != null) {
+                card.draw(this);
+            }
+        }
+
+        // draw dealer hand
+        textSize(25);
+        fill(0);
+        text("The Pot has $" + cardGame.potMoney, 500, 110);
+        for (int i = 0; i < cardGame.dealer.getSize(); i++) {
+            Card card = cardGame.dealer.getCard(i);
+            if (card != null) {
+                card.draw(this);
+            }
+            textSize(16);
+        }
+
+        // draw center hand
+        for (int i = 0; i < cardGame.centerCards.getSize(); i++) {
+            Card card = cardGame.centerCards.getCard(i);
+            if (card != null) {
+                card.draw(this);
+            }
+        }
+    }
+
+    @Override
+    public String getGameName() {
+        return "Texas Holdem";
+    }
+
+    @Override
+    public void play() {
+        // PApplet.main("Poker.TexasHoldemApp");
+
+        PApplet.runSketch(new String[] { "Poker.TexasHoldemApp" }, this); // “this” allows the sketch to use this one
+                                                                    // instance’s fields and functions, instead of
+                                                                    // creating a second instance, which would also be a
+                                                                    // problem if you launched processing using
+                                                                    // PApplet.main().
+        latch = new CountDownLatch(1);
+        try {
+            latch.await(); // to make this line of code finish, you call latch.countDown() somewhere else
+                           // in your processing code :)
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+
+    }
+
+    @Override
+    public String getScore() {
+        return String.valueOf(cardGame.playerMoney);
+    }
+
+    @Override
+    public boolean isHighScore(String score, String currentHighScore) {
+            return currentHighScore == null || 
+               Integer.parseInt(score) > Integer.parseInt(currentHighScore);  
+    }
+
+     @Override
+   public void exitActual() {
+    latch.countDown();
+   }
+
+}
