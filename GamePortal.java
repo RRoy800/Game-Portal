@@ -7,6 +7,7 @@ import Game.ErrorCheck;
 import Game.Game;
 import NumberGuess.NumberApp;
 import Poker.TexasHoldemApp;
+import BuzzFeedQuiz.Quiz;
 //import Store.StoreGame;
 
 public class GamePortal {
@@ -40,7 +41,7 @@ public class GamePortal {
         games.clear();
         games.add(new NumberApp());
         games.add(new TexasHoldemApp());
-        // games.add(new Quiz());
+        games.add(new Quiz());
     }
 
     public static void printGameChoices() {
